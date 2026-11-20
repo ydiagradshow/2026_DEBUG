@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DEBUG — Digital Art Exhibition 2026</title>
+<meta name="description" content="DEBUG 연세대학교 디지털아트학과 16회 졸업전시 2026 · 12.03–12.06 · 백양누리 B1 무악로타리홀">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000;
+    --fg: #f4f2ee;
+    --dim: rgba(244, 242, 238, 0.55);
+    --faint: rgba(244, 242, 238, 0.14);
+    --mono: "Space Mono", "IBM Plex Sans KR", ui-monospace, monospace;
+    --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--fg); scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans);
+         -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  body.locked { overflow: hidden; }
+
+  /* ---------- 1. 포스터 ---------- */
+  #poster { position: relative; height: 100vh; height: 100svh; background: #000; }
+  #c { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none;
+       touch-action: pan-y; /* 세로로 밀면 스크롤, 그 외엔 개미와 놀기 */
+       cursor: crosshair; -webkit-user-select: none; user-select: none;
+       -webkit-tap-highlight-color: transparent; }
+  #hint { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 16px; z-index: 2;
+          font: 400 11px/1 var(--mono); letter-spacing: .24em; color: var(--fg); opacity: .7;
+          text-decoration: none; padding: 8px 4px; mix-blend-mode: difference; }
+  #hint.blink { animation: blink 1.6s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- 2. 평면도 ---------- */
+  #plan { min-height: 100vh; padding: clamp(72px, 12vh, 140px) clamp(16px, 5vw, 72px) 64px;
+          max-width: 1320px; margin: 0 auto; }
+  .plan-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+               flex-wrap: wrap; border-bottom: 1px solid var(--faint); padding-bottom: 18px; margin-bottom: clamp(28px, 6vh, 56px); }
+  .plan-head h2 { margin: 0; font: 400 clamp(28px, 4.4vw, 56px)/1 var(--mono); letter-spacing: -0.02em; }
+  .plan-head p { margin: 0; font: 400 13px/1.7 var(--mono); color: var(--dim); }
+  .plan-head .hint { color: var(--fg); }
+
+  .plan-wrap { position: relative; }
+  #map { display: block; width: 100%; height: auto; max-height: 86svh; overflow: visible; }
+  #map .grid line { stroke: var(--faint); stroke-width: 1; }
+  #map .axis { stroke: rgba(244,242,238,.28); stroke-width: 1; stroke-dasharray: 6 6; }
+  #map .wall { fill: none; stroke: var(--fg); stroke-width: 2.4; stroke-linejoin: miter; }
+  #map .room { fill: #000; stroke: var(--fg); stroke-width: 1.8; }
+  #map .dash { fill: none; stroke: rgba(244,242,238,.45); stroke-width: 1.2; stroke-dasharray: 8 7; }
+  #map .vert { fill: #000; stroke: var(--fg); stroke-width: 1.6; }
+
+  /* 선이 그려지는 등장 애니메이션 */
+  #map .draw { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.6s cubic-bezier(.6,0,.2,1); }
+  #map.in .draw { stroke-dashoffset: 0; }
+  #map .room.draw { fill-opacity: 0; transition: stroke-dashoffset 1.4s cubic-bezier(.6,0,.2,1), fill-opacity .6s .9s; }
+  #map.in .room.draw { fill-opacity: 1; }
+  #map .dash.draw { stroke-dasharray: 8 7; stroke-dashoffset: 0; opacity: 0; transition: opacity .8s 1.2s; }
+  #map.in .dash.draw { opacity: 1; }
+
+  /* 작가 원 */
+  .dot { cursor: pointer; outline: none; }
+  .dot .hit { fill: transparent; }
+  .dot .ring { fill: #000; stroke: var(--fg); stroke-width: 2.2;
+               transform-box: fill-box; transform-origin: center; transform: scale(0);
+               transition: transform .5s cubic-bezier(.3,1.6,.5,1), fill .2s; }
+  #map.in .dot .ring { transform: scale(1); }
+  .dot .pulse { fill: none; stroke: var(--fg); stroke-width: 1.2; opacity: 0;
+                transform-box: fill-box; transform-origin: center; }
+  #map.in .dot .pulse { animation: pulse 2.8s ease-out infinite; animation-delay: var(--d, 0s); }
+  @keyframes pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.9); opacity: 0; } }
+  .dot .name { fill: var(--fg); font: 600 16px var(--sans); letter-spacing: -0.03em; text-anchor: middle; dominant-baseline: central;
+               opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .dot:hover .ring, .dot:focus-visible .ring, .dot.hl .ring { transform: scale(1.18); }
+  .dot:hover .name, .dot:focus-visible .name, .dot.hl .name { opacity: 1; }
+  .dot.active .ring { fill: var(--fg); }
+  .dot.active .name { fill: #000; opacity: 1; }
+  .dot:focus-visible .ring { stroke-width: 4; }
+
+  /* 작가 목록 */
+  .index { list-style: none; margin: clamp(36px, 7vh, 64px) 0 0; padding: 18px 0 0; border-top: 1px solid var(--faint);
+           display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 16px; }
+  .index button { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: flex; gap: 12px; align-items: baseline;
+                  padding: 10px 0; border-bottom: 1px solid transparent; font: 600 17px var(--sans); }
+  .index button span { font: 400 11px var(--mono); color: var(--dim); }
+  .index button:hover, .index button:focus-visible, .index button.active { border-bottom-color: var(--fg); }
+  .site-foot { margin-top: 72px; font: 400 11px/1.8 var(--mono); color: var(--dim); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  /* ---------- 3. 작가노트 패널 ---------- */
+  #scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 9; }
+  #scrim.open { opacity: 1; pointer-events: auto; }
+  #sheet { position: fixed; top: 0; right: 0; height: 100%; width: min(460px, 100%); z-index: 10;
+           background: #000; border-left: 1px solid var(--fg); display: flex; flex-direction: column;
+           transform: translateX(102%); transition: transform .45s cubic-bezier(.7,0,.2,1); visibility: hidden; }
+  #sheet.open { transform: none; visibility: visible; }
+  .sheet-bar { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;
+               border-bottom: 1px solid var(--faint); font: 400 12px var(--mono); color: var(--dim); }
+  .sheet-bar button { all: unset; cursor: pointer; font: 400 26px/1 var(--mono); color: var(--fg); padding: 4px 8px; margin: -4px -8px; }
+  .sheet-body { flex: 1; overflow-y: auto; padding: 28px 24px 40px; overscroll-behavior: contain; }
+  .s-kicker { margin: 0 0 6px; font: 400 11px var(--mono); letter-spacing: .2em; color: var(--dim); }
+  #s-name { margin: 0; font: 700 clamp(40px, 9vw, 56px)/1.05 var(--sans); letter-spacing: -0.02em; }
+  #s-title { margin: 18px 0 0; font: 600 19px/1.4 var(--sans); }
+  .sheet-body h3 { margin: 34px 0 10px; font: 700 11px var(--mono); letter-spacing: .2em; color: var(--dim);
+                   padding-bottom: 8px; border-bottom: 1px solid var(--faint); }
+  .sheet-body .txt p { margin: 0 0 1em; font: 400 15px/1.85 var(--sans); word-break: keep-all; white-space: pre-line; }
+  .sheet-body .txt.placeholder p { color: var(--dim); }
+  #s-link { display: inline-block; margin-top: 18px; font: 400 12px var(--mono); color: var(--fg); }
+  #s-link:empty { display: none; }
+  .sheet-nav { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--faint); }
+  .sheet-nav button { all: unset; cursor: pointer; padding: 18px 20px; font: 400 12px var(--mono); }
+  .sheet-nav button + button { text-align: right; border-left: 1px solid var(--faint); }
+  .sheet-nav button:hover, .sheet-nav button:focus-visible { background: var(--fg); color: #000; }
+
+  @media (max-width: 640px) {
+    #sheet { top: auto; bottom: 0; height: 88svh; width: 100%; border-left: 0; border-top: 1px solid var(--fg);
+             transform: translateY(102%); }
+    .sheet-body { padding: 22px 20px 32px; }
+    .plan-head { align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<section id="poster" aria-label="DEBUG 포스터">
+  <canvas id="c" tabindex="0" aria-label="DEBUG 포스터 — 클릭하면 개미들이 모이거나 흩어집니다"></canvas>
+  <a id="hint" href="#plan">CLICK</a>
+</section>
+
+<section id="plan" aria-labelledby="plan-title">
+  <header class="plan-head">
+    <h2 id="plan-title">FLOOR PLAN</h2>
+    <p>연세대학교 백양누리 B1 무악로타리홀<br><span class="hint">원을 누르면 작가노트를 볼 수 있어요</span></p>
+  </header>
+  <div class="plan-wrap">
+    <svg id="map" role="group" aria-label="전시장 평면도" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <ul class="index" id="index" aria-label="참여 작가"></ul>
+  <footer class="site-foot">
+    <span>DEBUG — 연세대학교 디지털아트학과 16회 졸업전시</span>
+    <span>2026.12.03 (Thu) – 12.06 (Sun) · 10:00 – 18:00</span>
+  </footer>
+</section>
+
+<div id="scrim"></div>
+<aside id="sheet" role="dialog" aria-modal="true" aria-labelledby="s-name" aria-hidden="true">
+  <div class="sheet-bar"><span id="s-count">01 / 08</span><button id="s-close" aria-label="닫기">×</button></div>
+  <div class="sheet-body">
+    <p class="s-kicker">ARTIST</p>
+    <h2 id="s-name"></h2>
+    <p id="s-title"></p>
+    <h3>작가노트 · ARTIST NOTE</h3>
+    <div class="txt" id="s-note"></div>
+    <h3>작품 설명 · ABOUT THE WORK</h3>
+    <div class="txt" id="s-desc"></div>
+    <a id="s-link" target="_blank" rel="noopener"></a>
+  </div>
+  <nav class="sheet-nav"><button id="s-prev">← 이전 작가</button><button id="s-next">다음 작가 →</button></nav>
+</aside>
+
+<script>
+(() => {
+/* =========================================================
+   DEBUG 포스터 v2
+   - 시작할 때 (클릭 없이도) 덮여 있던 검정 면이 개미가 되어 흩어지며 작업실 사진이 드러남
+   - 클릭하면 개미들이 다시 몰려와 검정을 덮음 (실금 없이 완벽 밀착)
+   - 다시 클릭하면 또 개미들이 흩어져 사라짐
+   ========================================================= */
+const PW = 1191, PH = 1684;   // 포스터 원본 크기
+const TEXT_Y = 1180;          // 글자 레이어가 시작되는 y
+const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+
+// ---------- 조절용 값 ----------
+const CFG = {
+  cell: small ? 20 : 16,     // 검정 면을 나누는 칸 크기 = 개미 한 마리 몫
+  antLen: small ? 30 : 25,   // 개미 몸길이
+  waveSpeed: 24,             // 퍼져 나가는 속도
+  waveJitter: 110,           // 퍼지는 경계의 들쭉날쭉함
+  fadeOut: 14,               // 칸이 개미로 바뀌며 사라지는 시간(프레임)
+  fadeIn: 8,                 // 개미가 돌아와 칸이 다시 채워지는 시간
+  stayers: small ? 25 : 45,  // 사진 위에 남아서 돌아다니는 작은 개미 수
+  names: ['정현준', '이건혁', '정나림', '전상웅', '윤서연', '박상민', '노연수', '신예은'],
+  nameScale: 1.5,            // 이름 개미 크기 (기존 대비 0.5배)
+  nameSpeed: 1.3,            // 이름 개미 걷는 속도
+  fleeRadius: 90,            // 마우스 회피 반경
+  fleeRadiusTouch: 150,      // 손가락 회피 반경
+  ink: '#000',
+};
+
+const IMG_PHOTO = 'debug 최최최최종종RGB웹-100.jpg';
+const IMG_TEXT  = 'debug 최최최최종종BLACK웹-100.jpg';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const hint = document.getElementById('hint');
+let dpr = 1, vw = 0, vh = 0, k = 1, ox = 0, oy = 0;
+const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+const cover = document.createElement('canvas'), cvx = cover.getContext('2d');
+const fg = document.createElement('canvas'), fgx = fg.getContext('2d');
+const photo = new Image(); photo.src = IMG_PHOTO;
+const txt = new Image(); txt.src = IMG_TEXT;
+
+const rand = (a, b) => a + Math.random() * (b - a);
+function angLerp(a, b, f) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * f;
+}
+
+// ---------- 검정 면 = 칸들의 모음 ----------
+const C = CFG.cell;
+const cells = [];
+for (let y = 0; y < PH; y += C) {
+  for (let x = 0; x < PW; x += C) {
+    cells.push({ x, y, w: Math.min(C, PW - x), h: Math.min(C, PH - y),
+                 cx: x + Math.min(C, PW - x) / 2, cy: y + Math.min(C, PH - y) / 2,
+                 a: 1, ta: 1, ant: null, wd: 0 });
+  }
+}
+const fading = new Set();
+let ants = [], nameAnts = [];
+let state = 'cover';            // 'cover' | 'out' | 'in'
+let wave = null, pending = [], pIdx = 0;
+let t = 0, dirty = true;
+const mouse = { x: -9999, y: -9999, inside: false, touch: false };
+
+function paintCell(c) {
+  const s = k * dpr;
+  const x0 = Math.floor(c.x * s);
+  const y0 = Math.floor(c.y * s);
+  // ★ 우측·하단 끝 칸은 cover 캔버스 끝까지 덮어 소수점 반올림 실금 원천 차단
+  const x1 = c.x + c.w >= PW ? cover.width : Math.ceil((c.x + c.w) * s);
+  const y1 = c.y + c.h >= PH ? cover.height : Math.ceil((c.y + c.h) * s);
+  cvx.clearRect(x0, y0, x1 - x0, y1 - y0);
+  if (c.a > 0) {
+    cvx.globalAlpha = c.a;
+    cvx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    cvx.globalAlpha = 1;
+  }
+}
+
+// ---------- 개미 ----------
+function makeAnt(x, y, cell, mode) {
+  const a = {
+    x, y, vx: 0, vy: 0, cell, mode,
+    h: rand(0, Math.PI * 2), dir: 0,
+    size: rand(0.85, 1.15),
+    maxS: mode === 'home' ? rand(5, 8) : rand(4.5, 8.5),
+    phase: rand(0, 6.28), seed: rand(0, 1000),
+    delay: 0, panic: 0, move: 0, wt: 0, wdir: rand(0, 6.28),
+  };
+  cell.ant = a;
+  ants.push(a);
+  return a;
+}
+
+function startOut(px, py) {
+  state = 'out';
+  wave = { x: px, y: py, r: 0 };
+  pending = [];
+  const currentStayers = ants.filter(a => !a.name && a.mode === 'wander').length;
+  const neededStayers = Math.max(0, CFG.stayers - currentStayers);
+
+  for (const c of cells) {
+    if (c.ta === 1) {
+      c.wd = Math.hypot(c.cx - px, c.cy - py) + Math.random() * CFG.waveJitter;
+      pending.push(c);
+    } else if (c.ant) {
+      const a = c.ant;
+      const keepWander = a.name || (Math.random() < CFG.stayers / cells.length);
+      a.mode = keepWander ? 'wander' : 'flee';
+      a.dir = Math.atan2(a.y - py, a.x - px) + rand(-0.6, 0.6);
+      a.delay = 0;
+    }
+  }
+  pending.sort((a, b) => a.wd - b.wd);
+  pIdx = 0;
+  wave.stayProb = pending.length > 0 ? (neededStayers / pending.length) : 0;
+  assignNames();
+  setHint();
+}
+
+function assignNames() {
+  cells.forEach(c => { c.name = null; });
+  const alive = new Set(ants.filter(a => a.name).map(a => a.name));
+  const todo = CFG.names.filter(n => !alive.has(n));
+  const pool = pending.filter(c => c.cx > 160 && c.cx < PW - 160 && c.cy > 120 && c.cy < 1100);
+  const picked = [];
+  for (let tries = 0; picked.length < todo.length && tries < 4000; tries++) {
+    const c = pool[(Math.random() * pool.length) | 0];
+    if (!c || picked.some(o => Math.hypot(o.cx - c.cx, o.cy - c.cy) < 230 - tries * 0.05)) continue;
+    picked.push(c);
+  }
+  picked.forEach((c, i) => { c.name = todo[i]; });
+}
+
+function activate(c, stayProb) {
+  c.ta = 0; fading.add(c);
+  const a = makeAnt(c.cx + rand(-2, 2), c.cy + rand(-2, 2), c, (c.name || Math.random() < stayProb) ? 'wander' : 'flee');
+  if (c.name) { a.name = c.name; c.name = null; a.wt = rand(60, 140); a.wdir = Math.random() < 0.5 ? 0 : Math.PI; a.flip = a.wdir > 1; a.h = a.wdir; }
+  a.dir = Math.atan2(c.cy - wave.y, c.cx - wave.x) + rand(-0.7, 0.7);
+  a.h = a.dir + rand(-0.8, 0.8);
+  a.delay = rand(0, 12);
+}
+
+function startIn() {
+  state = 'in';
+  pending = []; pIdx = 0; wave = null;
+  for (const c of cells) {
+    if (c.ta === 1) continue;
+    if (c.ant) {
+      c.ant.mode = 'home';
+      c.ant.maxS = rand(5, 8);
+      c.ant.delay = rand(0, 15);
+      continue;
+    }
+    const dl = c.cx, dr = PW - c.cx, dt = c.cy, db = PH - c.cy;
+    let edge = [dl, dr, dt, db].indexOf(Math.min(dl, dr, dt, db));
+    if (Math.random() < 0.25) edge = (Math.random() * 4) | 0;
+    const off = rand(30, 260);
+    let x, y;
+    if (edge === 0) { x = -off; y = c.cy + rand(-120, 120); }
+    else if (edge === 1) { x = PW + off; y = c.cy + rand(-120, 120); }
+    else if (edge === 2) { y = -off; x = c.cx + rand(-120, 120); }
+    else { y = PH + off; x = c.cx + rand(-120, 120); }
+    const a = makeAnt(x, y, c, 'home');
+    a.h = Math.atan2(c.cy - y, c.cx - x);
+    a.delay = rand(0, 45);
+  }
+  setHint();
+}
+
+function toggle(px, py) {
+  if (state === 'out') startIn();
+  else startOut(px, py);
+}
+
+function updateAnt(a, dtf) {
+  if (a.delay > 0) { a.delay -= dtf; a.move = 0; return; }
+  let dvx, dvy, steer;
+  if (a.mode === 'flee') {
+    a.dir += Math.sin(t * 0.05 + a.seed) * 0.025 * dtf;
+    dvx = Math.cos(a.dir) * a.maxS; dvy = Math.sin(a.dir) * a.maxS;
+    steer = 0.07;
+  } else if (a.mode === 'wander') {
+    a.wt -= dtf;
+    if (a.wt <= 0) {
+      a.wt = rand(40, 160);
+      a.wdir = a.name ? (Math.cos(a.h) >= 0 ? 0 : Math.PI) + rand(-0.3, 0.3) : a.h + rand(-1.2, 1.2);
+    }
+    a.wdir += Math.sin(t * 0.03 + a.seed) * (a.name ? 0.012 : 0.03);
+    const mg = a.name ? 60 : 30, ws = a.name ? CFG.nameSpeed : 1.5;
+    const yMax = a.name ? 1140 : PH - 30;
+    if (a.x < mg) a.wdir = rand(-0.4, 0.4); else if (a.x > PW - mg) a.wdir = Math.PI + rand(-0.4, 0.4);
+    if (a.y < mg) a.wdir = a.name ? (Math.cos(a.wdir) >= 0 ? 0.35 : Math.PI - 0.35) : Math.PI / 2;
+    else if (a.y > yMax) a.wdir = a.name ? (Math.cos(a.wdir) >= 0 ? -0.35 : Math.PI + 0.35) : -Math.PI / 2;
+    dvx = Math.cos(a.wdir) * ws; dvy = Math.sin(a.wdir) * ws;
+    steer = 0.12;
+  } else { // home
+    const dx = a.cell.cx - a.x, dy = a.cell.cy - a.y;
+    const d = Math.hypot(dx, dy) || 0.0001;
+    if (d < 2.5) { arrive(a); return true; }
+    const sp = d < 30 ? a.maxS * Math.max(0.15, d / 30) : a.maxS;
+    dvx = dx / d * sp; dvy = dy / d * sp;
+    steer = 0.16;
+  }
+  if (a.mode !== 'home' || Math.hypot(a.cell.cx - a.x, a.cell.cy - a.y) > 30) {
+    const zz = a.name ? 0.2 : 1;
+    const w = (Math.sin(t * 0.18 + a.seed) * 0.4 + Math.sin(t * 0.05 + a.seed * 2) * 0.3) * zz;
+    const c = Math.cos(w), s = Math.sin(w);
+    const rx = dvx * c - dvy * s, ry = dvx * s + dvy * c;
+    dvx = rx; dvy = ry;
+  }
+  let ax = (dvx - a.vx) * steer, ay = (dvy - a.vy) * steer;
+  if (a.name && a.mode === 'wander') {
+    for (const o of nameAnts) {
+      if (o === a) continue;
+      const dx = a.x - o.x, dy = (a.y - o.y) * 1.8, d = Math.hypot(dx, dy);
+      if (d < 85 && d > 0.01) { const f = (1 - d / 85) * 0.25; ax += dx / d * f; ay += dy / d * f; }
+    }
+  }
+
+  let scared = mouse.inside;
+  if (a.mode === 'home') {
+    a.age = (a.age || 0) + dtf;
+    if (a.age > 150 || Math.hypot(a.cell.cx - a.x, a.cell.cy - a.y) < CFG.fleeRadiusTouch * 1.3) scared = false;
+  } else a.age = 0;
+  if (scared) {
+    const R = (mouse.touch ? CFG.fleeRadiusTouch : CFG.fleeRadius) + (a.name ? 30 : 0);
+    const mx = a.x - mouse.x, my = a.y - mouse.y, md2 = mx * mx + my * my;
+    if (md2 < R * R) {
+      const md = Math.sqrt(md2) || 0.001;
+      let f = 1 - md / R; f = f * f * 4.8;
+      const side = (a.seed % 2 < 1 ? 1 : -1) * 0.35;
+      ax += (mx / md - (my / md) * side) * f;
+      ay += (my / md + (mx / md) * side) * f;
+      a.panic = Math.min(1, a.panic + 0.25);
+    }
+  }
+  a.vx += ax * dtf; a.vy += ay * dtf;
+  const cap = a.maxS * (1 + a.panic * 1.5);
+  const spd = Math.hypot(a.vx, a.vy);
+  if (spd > cap) { a.vx *= cap / spd; a.vy *= cap / spd; }
+  a.panic *= Math.pow(0.975, dtf);
+  a.x += a.vx * dtf; a.y += a.vy * dtf;
+
+  const s2 = Math.hypot(a.vx, a.vy);
+  if (s2 > 0.12) a.h = angLerp(a.h, Math.atan2(a.vy, a.vx), Math.min(1, 0.22 * dtf));
+  a.phase += s2 * (a.name ? 0.24 : 0.42) * dtf;
+  a.move = Math.min(1, s2 / 1.2);
+
+  if (a.mode === 'flee' && (a.x < -50 || a.x > PW + 50 || a.y < -50 || a.y > PH + 50)) {
+    a.cell.ant = null;
+    return true;
+  }
+  return false;
+}
+
+function arrive(a) {
+  const c = a.cell;
+  c.ant = null;
+  c.ta = 1; fading.add(c);
+}
+
+const LEGS = [[0.10, 0.38, 0.30], [0.04, 0.04, 0.35], [-0.02, -0.30, 0.31]];
+const WALK = 8, IDLE = 3, SMAX = 1.3;
+const atlas = document.createElement('canvas'), atx = atlas.getContext('2d');
+let sprite = 0;
+
+function antShape(g, L, phase, move, tw, lw) {
+  g.beginPath();
+  const seg = (lx, rx, ry) => { g.moveTo(lx * L + rx * L, 0); g.ellipse(lx * L, 0, rx * L, ry * L, 0, 0, Math.PI * 2); };
+  seg(-0.29, 0.25, 0.155); seg(0.04, 0.145, 0.075); seg(0.30, 0.115, 0.10);
+  g.fill();
+  g.beginPath();
+  for (let i = 0; i < 3; i++) {
+    const [bx, tx, ty] = LEGS[i];
+    for (let side = -1; side <= 1; side += 2) {
+      const group = ((i % 2 === 0) === (side > 0)) ? 0 : Math.PI;
+      const tipx = tx + Math.sin(phase + group) * 0.11 * move;
+      const kx = bx + (tipx - bx) * 0.38;
+      g.moveTo(bx * L, 0); g.lineTo(kx * L, 0.23 * side * L); g.lineTo(tipx * L, ty * side * L);
+    }
+  }
+  for (let side = -1; side <= 1; side += 2) {
+    g.moveTo(0.38 * L, 0.04 * side * L);
+    g.lineTo(0.50 * L, (0.15 + tw * side) * side * L);
+    g.lineTo(0.64 * L, (0.12 - tw) * side * L);
+  }
+  g.lineWidth = lw; g.stroke();
+}
+
+function buildAtlas() {
+  const L = CFG.antLen * SMAX * k * dpr;
+  sprite = Math.ceil(L * 1.5) + 2;
+  atlas.width = sprite * (WALK + IDLE); atlas.height = sprite;
+  atx.fillStyle = CFG.ink; atx.strokeStyle = CFG.ink;
+  atx.lineCap = 'round'; atx.lineJoin = 'round';
+  const lw = Math.max(1, 0.085 * L);
+  for (let f = 0; f < WALK + IDLE; f++) {
+    atx.save(); atx.translate(f * sprite + sprite / 2, sprite / 2);
+    if (f < WALK) antShape(atx, L, f / WALK * Math.PI * 2, 1, 0, lw);
+    else antShape(atx, L, 0, 0, [-0.05, 0, 0.05][f - WALK], lw);
+    atx.restore();
+  }
+}
+
+function drawAnts() {
+  const base = dpr * k, half = sprite / 2;
+  for (const a of ants) {
+    if (a.name) continue;
+    let f;
+    if (a.move > 0.25) f = Math.floor((a.phase % 6.2832) / 6.2832 * WALK) % WALK;
+    else { const s = Math.sin(t * 0.12 + a.seed); f = WALK + (s < -0.33 ? 0 : s > 0.33 ? 2 : 1); }
+    const sc = a.size / SMAX, c = Math.cos(a.h) * sc, s = Math.sin(a.h) * sc;
+    ctx.setTransform(c, s, -s, c, dpr * ox + a.x * base, dpr * oy + a.y * base);
+    ctx.drawImage(atlas, f * sprite, 0, sprite, sprite, -half, -half, sprite, sprite);
+  }
+  for (const a of ants) if (a.name) drawNameAnt(a);
+}
+
+const NAME_FS = CFG.antLen * CFG.nameScale * 0.43;
+const NAME_FONT = `700 ${NAME_FS}px "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => ants.forEach(a => { a.w = 0; }));
+
+function drawNameAnt(a) {
+  const base = dpr * k;
+  const ch = Math.cos(a.h);
+  if (a.flip && ch > 0.2) a.flip = false; else if (!a.flip && ch < -0.2) a.flip = true;
+  const s = a.flip ? -1 : 1;
+  const ang = a.flip ? a.h + Math.PI : a.h;
+  const c = Math.cos(ang), sn = Math.sin(ang);
+  ctx.setTransform(c * base, sn * base, -sn * base, c * base, dpr * ox + a.x * base, dpr * oy + a.y * base);
+  ctx.font = NAME_FONT;
+  if (!a.w) a.w = ctx.measureText(a.name).width;
+  const W = a.w, H = NAME_FS * 0.5, legL = NAME_FS * 0.78, mv = a.move;
+
+  ctx.beginPath();
+  const bases = [s * W * 0.32, 0, -s * W * 0.32];
+  const reach = [s * W * 0.2, s * W * 0.02, -s * W * 0.2];
+  for (let i = 0; i < 3; i++) {
+    for (let side = -1; side <= 1; side += 2) {
+      const group = ((i % 2 === 0) === (side > 0)) ? 0 : Math.PI;
+      const sw = Math.sin(a.phase + group) * W * 0.09 * mv * s;
+      const lift = Math.max(0, Math.cos(a.phase + group)) * NAME_FS * 0.12 * mv;
+      const bx = bases[i], by = side * (H + NAME_FS * 0.02);
+      const tx = bx + reach[i] + sw, ty = side * (H + legL - lift);
+      const kx = bx + (tx - bx) * 0.3, ky = side * (H + legL * 0.7);
+      ctx.moveTo(bx, by); ctx.lineTo(kx, ky); ctx.lineTo(tx, ty);
+    }
+  }
+  const tw = Math.sin(t * 0.12 + a.seed) * NAME_FS * 0.12;
+  const hx = s * (W * 0.5 + NAME_FS * 0.06);
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.moveTo(hx, side * H * 0.12);
+    ctx.lineTo(hx + s * NAME_FS * 0.38, side * (H * 0.62 + tw * side));
+    ctx.lineTo(hx + s * NAME_FS * 0.78, side * (H * 0.42 - tw));
+  }
+  ctx.strokeStyle = CFG.ink; ctx.lineWidth = NAME_FS * 0.1;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  ctx.fillStyle = CFG.ink;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(a.name, 0, NAME_FS * 0.04);
+}
+
+// ---------- 레이어 준비 (우측/하단 1px 실금 완벽 방지 처리) ----------
+function resize(force) {
+  const nd = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  if (!force && nd === dpr && r.width === vw && r.height === vh) return;
+  dpr = nd; vw = r.width; vh = r.height;
+  canvas.width = Math.round(vw * dpr); canvas.height = Math.round(vh * dpr);
+
+  k = Math.min(vw / PW, vh / PH);
+  ox = (vw - PW * k) / 2;
+  oy = (vh - PH * k) / 2;
+  const s = k * dpr;
+  const px = Math.round(dpr * ox), py = Math.round(dpr * oy);
+  const pw = Math.round(PW * s), ph = Math.round(PH * s);
+
+  bg.width = canvas.width; bg.height = canvas.height;
+  bgx.fillStyle = '#000'; bgx.fillRect(0, 0, bg.width, bg.height);
+  bgx.imageSmoothingQuality = 'high';
+  if (photo.naturalWidth) {
+    bgx.save();
+    bgx.beginPath();
+    bgx.rect(px, py, pw, ph);
+    bgx.clip();
+    bgx.drawImage(photo, px, py, pw, ph);
+    bgx.restore();
+  }
+
+  // ★ cover 캔버스에 2px 여유분을 두어 배경 사진 우측/하단 끝이 절대 비어 보이지 않도록 함
+  cover.width = pw + 2; cover.height = ph + 2;
+  cvx.fillStyle = CFG.ink;
+  for (const c of cells) if (c.a > 0) paintCell(c);
+
+  fg.width = pw; fg.height = Math.ceil((PH - TEXT_Y) * s);
+  fgx.clearRect(0, 0, fg.width, fg.height);
+  fgx.imageSmoothingQuality = 'high';
+  if (txt.naturalWidth) {
+    const isFullPoster = txt.naturalHeight > txt.naturalWidth;
+    if (isFullPoster) {
+      const sy = (TEXT_Y / PH) * txt.naturalHeight;
+      const sh = ((PH - TEXT_Y) / PH) * txt.naturalHeight;
+      fgx.drawImage(txt, 0, sy, txt.naturalWidth, sh, 0, 0, fg.width, fg.height);
+    } else {
+      fgx.drawImage(txt, 0, 0, fg.width, fg.height);
+    }
+  }
+
+  buildAtlas();
+  dirty = true;
+}
+
+function toPoster(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left - ox) / k, y: (e.clientY - r.top - oy) / k };
+}
+canvas.addEventListener('pointermove', e => {
+  mouse.touch = e.pointerType === 'touch';
+  const p = toPoster(e); mouse.x = p.x; mouse.y = p.y; mouse.inside = true;
+});
+canvas.addEventListener('pointerdown', e => {
+  mouse.touch = e.pointerType === 'touch';
+  const p = toPoster(e); mouse.x = p.x; mouse.y = p.y; mouse.inside = true;
+});
+window.addEventListener('pointerup', e => { if (e.pointerType === 'touch') mouse.inside = false; });
+window.addEventListener('pointercancel', () => { mouse.inside = false; });
+canvas.addEventListener('pointerleave', () => { mouse.inside = false; });
+canvas.addEventListener('click', e => { const p = toPoster(e); toggle(p.x, p.y); });
+canvas.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(PW / 2, PH * 0.45); }
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(canvas);
+
+function setHint() {
+  if (!hint) return;
+  const covered = state !== 'out';
+  hint.textContent = covered ? 'CLICK' : 'SCROLL ↓';
+  hint.classList.toggle('blink', covered);
+}
+if (hint) hint.addEventListener('click', e => {
+  if (state !== 'out') { e.preventDefault(); toggle(PW / 2, PH * 0.45); }
+});
+
+let posterOn = true;
+if (window.IntersectionObserver) new IntersectionObserver(es => { posterOn = es[0].isIntersecting; }).observe(canvas);
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dtf = Math.min(2.5, (now - last) / 16.667);
+  last = now;
+  if (!posterOn) return;
+  const idle = state === 'cover' && !fading.size && !ants.length;
+  if (idle && !dirty) return;
+  t += dtf;
+
+  if (state === 'out' && pIdx < pending.length) {
+    wave.r += CFG.waveSpeed * dtf;
+    const stayProb = wave.stayProb ?? (CFG.stayers / pending.length);
+    while (pIdx < pending.length && pending[pIdx].wd <= wave.r) activate(pending[pIdx++], stayProb);
+  }
+  for (const c of fading) {
+    const step = dtf / (c.ta > c.a ? CFG.fadeIn : CFG.fadeOut);
+    c.a = c.ta > c.a ? Math.min(c.ta, c.a + step) : Math.max(c.ta, c.a - step);
+    paintCell(c);
+    if (c.a === c.ta) fading.delete(c);
+  }
+  nameAnts = ants.filter(x => x.name);
+  for (let i = ants.length - 1; i >= 0; i--) {
+    if (updateAnt(ants[i], dtf)) { ants[i] = ants[ants.length - 1]; ants.pop(); }
+  }
+  if (state === 'in' && !ants.length && !fading.size) { state = 'cover'; setHint(); }
+
+  const px = Math.round(dpr * ox), py = Math.round(dpr * oy);
+  const pw = Math.round(PW * k * dpr), ph = Math.round(PH * k * dpr);
+
+  // 그리기: 사진 → 검정 덮개 → 개미 → 하단 글자(screen 합성)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(bg, 0, 0);
+  ctx.drawImage(cover, px, py);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+  drawAnts();
+  ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.drawImage(fg, px, Math.round(dpr * (oy + TEXT_Y * k)));
+  ctx.restore();
+  dirty = false;
+}
+
+(async () => {
+  await Promise.all([photo.decode().catch(() => {}), txt.decode().catch(() => {})]);
+  resize(true);
+  // 시작하자마자 클릭 없이도 검정 면이 개미가 되어 흩어지며 사라지는 모션 실행
+  startOut(PW / 2, PH * 0.45);
+  requestAnimationFrame(t0 => { last = t0; requestAnimationFrame(frame); });
+})();
+})();
+</script>
+
+<script>
+/* =========================================================
+   작가 정보 — 총 8명 (신예은 작가노트 및 작품 설명 적용 완료)
+   ========================================================= */
+/* =========================================================
+   작가 정보 — 총 8명 (신예은, 정나림 작가 정보 적용 완료)
+   ========================================================= */
+const ARTISTS = [
+  { id: 'yeonsu',    name: '노연수', x: 95,   y: 46,  title: '', link: '', note: '', desc: '' },
+  { id: 'sangmin',   name: '박상민', x: 95,   y: 360, title: '', link: '', note: '', desc: '' },
+  { id: 'geonhyeok', name: '이건혁', x: 332,  y: 222, title: '', link: '', note: '', desc: '' },
+  { id: 'seoyeon',   name: '윤서연', x: 446,  y: 222, title: '', link: '', note: '', desc: '' },
+  { id: 'sangwoong', name: '전상웅', x: 659,  y: 158, title: '', link: '', note: '', desc: '' },
+  {
+    id: 'yeeun',
+    name: '신예은',
+    x: 715,
+    y: 421,
+    title: '',
+    link: '',
+    note: '찻잎을 직접 맷돌에 갈아 차를 만드는 카페에 들렀다. 찻잎을 갈수록 향이 점차 짙어지는 경험에서 이 작업은 시작되었다. 물질을 갈아 새로운 감각을 만들어내는 맷돌의 행위를 빛으로 치환한다면 어떤 모습일까?\n\n맷돌은 본래 곡물을 갈기 위한 도구다. 하지만 꼭 곡물만 갈아야 할까? 이번에는 빛과 소리를 갈아보기로 했다. 회전하는 맷돌 사이로 가루 대신 빛과 안개가 흘러나오고, 낯선 소리가 그 틈을 채운다.\n\n익숙한 사물이 본래의 기능에서 벗어나 새로운 감각을 만들어내는 과정을 보여주고자 한다.',
+    desc: '회전과 빛, 안개, 소리를 이용한 키네틱 설치 작업.\n\n현무암, 목재합판, 알루미늄, 유리, 할로겐전구, 아두이노 회로\n\n510 × 510 × 400 mm'
+  },
+  {
+    id: 'narim',
+    name: '정나림',
+    x: 876,
+    y: 421,
+    title: 'Monster’s',
+    link: '',
+    note: '우리는 흔히 ‘비정상적인 형태를 가진 생명체’를 괴물이라고 부른다.\n그렇다면 본인의 기준과는 맞지 않는 다른 생김새나 복장을 가진 사람도 괴물일까?\n\n세상에는 정말 다양한 사람들이 살고 있다.\n“저 사람은 손톱을 온통 까만색으로 뒤덮고 치렁치렁한 귀걸이를 달고 있네.”\n“저 커플은 남자가 키가 엄청 크고, 여자는 키가 엄청 작네? 안 어울린다.”\n\n자신과는 다른 상황과 문화, 사고방식을 가진 사람들을 보고 그들을 다르다고 규정짓고, 이상하게 바라보는 시선을 발견했다.\n\n신기했다.\n그들 역시 각자의 방식으로 살아갈 뿐인데.',
+    desc: '펜과 노트에 괴물의 모습을 하나씩 그려가며 상상했다. 각기 다른 형상과 습성을 가진 괴물들은 저마다의 방식으로 자기의 숨을 쉰다.\n\n영상에서는 네 마리 괴물의 움직임과 일상을 보여준다. 관객은 일정한 거리를 두고 이들의 생김새와 행동을 관찰한다. 괴물들은 누구에게도 눈길을 주지 않은 채 자신에게 주어진 삶을 살아간다.\n\n영상은 끝없이 반복된다. 계속해서 되풀이되며 흘러가는 삶처럼.\n\n3D 애니메이션\n펜과 노트, blender, zbrush, Substance 3D Painter'
+  },
+  { id: 'hyeonjun',  name: '정현준', x: 1062, y: 362, title: '', link: '', note: '', desc: '' },
+];
+
+// 비어 있을 때 보여줄 안내 문구
+const PLACEHOLDER = {
+  title: '작품 제목',
+  note: '여기에 작가노트를 넣어 주세요.\n\n작업을 시작하게 된 계기, 붙잡고 있는 질문, 이번 전시에서 보여주고 싶은 것을 자유롭게 적으면 됩니다.',
+  desc: '여기에 작품 설명을 넣어 주세요.\n\n관객이 무엇을 보고 어떻게 경험하는지, 사용한 재료와 기술, 인터랙션 방법 등을 적으면 됩니다.',
+};
+
+/* ---------- 평면도 도형 ---------- */
+const PLAN = {
+  outline: 'M0 0 H993 L1154 162 V453 H0 Z',
+  rooms: [               // [x, y, 너비, 높이]
+    [0, 0, 186, 93],       // 노연수
+    [0, 269, 186, 184],    // 박상민
+    [341, 135, 48, 184],   // 이건혁 벽 1
+    [389, 135, 22, 184],   // 이건혁 벽 2
+    [411, 158, 70, 139],   // 윤서연
+    [589, 88, 140, 140],   // 전상웅
+    [646, 388, 138, 65],   // 신예은
+    [784, 388, 185, 65],   // 정나림
+    [969, 250, 185, 19],   // 정현준 앞 선반
+    [969, 269, 185, 184],  // 정현준
+  ],
+  dashes: [],
+  verts: [[0,0],[186,0],[0,93],[0,111],[993,0],[1154,162],[1154,453],[0,453]],
+  axes: ['M577 -58 V511', 'M-58 227 H1212'],
+};
+const DOT_R = 34;            // 원 반지름
+const VB = { x: -58, y: -58, w: 1270, h: 569 };
+
+const NS = 'http://www.w3.org/2000/svg';
+const map = document.getElementById('map');
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const rectPath = ([x, y, w, h]) => `M${x} ${y} H${x + w} V${y + h} H${x} Z`;
+
+const root = el('g', {}, map);
+// 모눈
+const grid = el('g', { class: 'grid' }, root);
+for (let x = VB.x; x <= VB.x + VB.w; x += 57.7) el('line', { x1: x, y1: VB.y, x2: x, y2: VB.y + VB.h }, grid);
+for (let y = VB.y + 22; y <= VB.y + VB.h; y += 57.7) el('line', { x1: VB.x, y1: y, x2: VB.x + VB.w, y2: y }, grid);
+PLAN.axes.forEach(d => el('path', { d, class: 'axis' }, root));
+
+// 벽과 부스
+el('path', { d: PLAN.outline, class: 'wall draw', pathLength: 1 }, root);
+PLAN.rooms.forEach((r, i) => {
+  const p = el('path', { d: rectPath(r), class: 'room draw', pathLength: 1 }, root);
+  p.style.transitionDelay = `${0.25 + i * 0.07}s, ${0.9 + i * 0.05}s`;
+});
+PLAN.dashes.forEach(d => el('path', { d, class: 'dash draw' }, root));
+PLAN.verts.forEach(([x, y]) => el('circle', { cx: x, cy: y, r: 4.5, class: 'vert' }, root));
+
+// 작가 원
+const dots = ARTISTS.map((a, i) => {
+  const g = el('g', { class: 'dot', tabindex: 0, role: 'button', 'aria-label': `${a.name} 작가노트 보기`, 'data-i': i }, root);
+  el('circle', { cx: a.x, cy: a.y, r: DOT_R + 12, class: 'hit' }, g);
+  const pulse = el('circle', { cx: a.x, cy: a.y, r: DOT_R, class: 'pulse' }, g);
+  pulse.style.setProperty('--d', `${(i * 0.31) % 2.8}s`);
+  const ring = el('circle', { cx: a.x, cy: a.y, r: DOT_R, class: 'ring' }, g);
+  ring.style.transitionDelay = `${1.3 + i * 0.06}s`;
+  const label = el('text', { x: a.x, y: a.y + 1, class: 'name' }, g);
+  label.textContent = a.name;
+  g.addEventListener('click', () => openArtist(i));
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openArtist(i); } });
+  g._label = label;
+  return g;
+});
+
+// 폰 세로 화면에선 평면도를 90° 돌려서 크게
+function layoutMap() {
+  const portrait = window.innerWidth < 720 && window.innerHeight > window.innerWidth;
+  if (portrait) {
+    map.setAttribute('viewBox', `${-(VB.y + VB.h)} ${VB.x} ${VB.h} ${VB.w}`);
+    root.setAttribute('transform', 'rotate(90)');
+  } else {
+    map.setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
+    root.removeAttribute('transform');
+  }
+  dots.forEach((g, i) => {
+    const a = ARTISTS[i];
+    if (portrait) g._label.setAttribute('transform', `rotate(-90 ${a.x} ${a.y})`);
+    else g._label.removeAttribute('transform');
+  });
+}
+layoutMap();
+window.addEventListener('resize', layoutMap);
+
+// 화면에 들어오면 선 그리기 시작
+if (window.IntersectionObserver) {
+  new IntersectionObserver((es, ob) => {
+    if (es[0].isIntersecting) {
+      map.classList.add('in');
+      setTimeout(() => dots.forEach(g => g.querySelector('.ring').style.transitionDelay = '0s'), 2600);
+      ob.disconnect();
+    }
+  }, { threshold: 0.25 }).observe(map);
+} else map.classList.add('in');
+
+// 작가 목록
+const index = document.getElementById('index');
+const listBtns = ARTISTS.map((a, i) => {
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.innerHTML = `<span>${String(i + 1).padStart(2, '0')}</span>`;
+  b.append(a.name);
+  b.addEventListener('click', () => openArtist(i));
+  b.addEventListener('mouseenter', () => dots[i].classList.add('hl'));
+  b.addEventListener('mouseleave', () => dots[i].classList.remove('hl'));
+  li.appendChild(b); index.appendChild(li);
+  return b;
+});
+
+/* ---------- 작가노트 패널 (제목, 작가노트, 설명만 표시) ---------- */
+const sheet = document.getElementById('sheet');
+const scrim = document.getElementById('scrim');
+const $ = id => document.getElementById(id);
+let current = -1, lastFocus = null;
+
+function fillText(node, text, placeholder) {
+  node.textContent = '';
+  const empty = !text || !text.trim();
+  node.classList.toggle('placeholder', empty);
+  (empty ? placeholder : text).split(/\n\s*\n/).forEach(par => {
+    const p = document.createElement('p');
+    p.textContent = par.trim();
+    node.appendChild(p);
+  });
+}
+
+function openArtist(i) {
+  i = (i + ARTISTS.length) % ARTISTS.length;
+  const a = ARTISTS[i];
+  if (current < 0) lastFocus = document.activeElement;
+  current = i;
+  $('s-count').textContent = `${String(i + 1).padStart(2, '0')} / ${String(ARTISTS.length).padStart(2, '0')}`;
+  $('s-name').textContent = a.name;
+  $('s-title').textContent = a.title || '';
+  $('s-title').style.display = a.title ? 'block' : 'none';
+  fillText($('s-note'), a.note, PLACEHOLDER.note);
+  fillText($('s-desc'), a.desc, PLACEHOLDER.desc);
+  const link = $('s-link');
+  link.textContent = a.link ? `${a.link.replace(/^https?:\/\//, '')} ↗` : '';
+  if (a.link) link.href = a.link; else link.removeAttribute('href');
+  sheet.querySelector('.sheet-body').scrollTop = 0;
+
+  dots.forEach((g, j) => g.classList.toggle('active', j === i));
+  listBtns.forEach((b, j) => b.classList.toggle('active', j === i));
+  sheet.classList.add('open'); scrim.classList.add('open');
+  sheet.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('locked');
+  history.replaceState(null, '', '#' + a.id);
+  $('s-close').focus({ preventScroll: true });
+}
+
+function closeArtist() {
+  if (current < 0) return;
+  current = -1;
+  sheet.classList.remove('open'); scrim.classList.remove('open');
+  sheet.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('locked');
+  dots.forEach(g => g.classList.remove('active'));
+  listBtns.forEach(b => b.classList.remove('active'));
+  history.replaceState(null, '', location.pathname + location.search);
+  if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+}
+
+$('s-close').addEventListener('click', closeArtist);
+scrim.addEventListener('click', closeArtist);
+$('s-prev').addEventListener('click', () => openArtist(current - 1));
+$('s-next').addEventListener('click', () => openArtist(current + 1));
+window.addEventListener('keydown', e => {
+  if (current < 0) return;
+  if (e.key === 'Escape') closeArtist();
+  if (e.key === 'ArrowLeft') openArtist(current - 1);
+  if (e.key === 'ArrowRight') openArtist(current + 1);
+});
+sheet.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const f = [...sheet.querySelectorAll('button, a[href]')];
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+function openFromHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const i = ARTISTS.findIndex(a => a.id === id);
+  if (i >= 0) {
+    document.getElementById('plan').scrollIntoView();
+    openArtist(i);
+  }
+}
+openFromHash();
+</script>
+</body>
+</html>
