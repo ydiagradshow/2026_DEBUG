@@ -169,7 +169,7 @@
 /* =========================================================
    DEBUG 포스터 v2
    - 시작할 때 (클릭 없이도) 덮여 있던 검정 면이 개미가 되어 흩어지며 작업실 사진이 드러남
-   - 클릭하면 개미들이 다시 몰려와 검정을 덮음 (실금 없이 완벽 밀착)
+   - 클릭하면 개미들이 다시 몰려와 검정을 덮음
    - 다시 클릭하면 또 개미들이 흩어져 사라짐
    ========================================================= */
 const PW = 1191, PH = 1684;   // 포스터 원본 크기
@@ -186,7 +186,7 @@ const CFG = {
   fadeIn: 8,                 // 개미가 돌아와 칸이 다시 채워지는 시간
   stayers: small ? 25 : 45,  // 사진 위에 남아서 돌아다니는 작은 개미 수
   names: ['정현준', '이건혁', '정나림', '전상웅', '윤서연', '박상민', '노연수', '신예은'],
-  nameScale: 1.5,            // 이름 개미 크기 (기존 대비 0.5배)
+  nameScale: 1.5,            // 이름 개미 크기
   nameSpeed: 1.3,            // 이름 개미 걷는 속도
   fleeRadius: 90,            // 마우스 회피 반경
   fleeRadiusTouch: 150,      // 손가락 회피 반경
@@ -235,7 +235,6 @@ function paintCell(c) {
   const s = k * dpr;
   const x0 = Math.floor(c.x * s);
   const y0 = Math.floor(c.y * s);
-  // ★ 우측·하단 끝 칸은 cover 캔버스 끝까지 덮어 소수점 반올림 실금 원천 차단
   const x1 = c.x + c.w >= PW ? cover.width : Math.ceil((c.x + c.w) * s);
   const y1 = c.y + c.h >= PH ? cover.height : Math.ceil((c.y + c.h) * s);
   cvx.clearRect(x0, y0, x1 - x0, y1 - y0);
@@ -533,7 +532,7 @@ function drawNameAnt(a) {
   ctx.fillText(a.name, 0, NAME_FS * 0.04);
 }
 
-// ---------- 레이어 준비 (우측/하단 1px 실금 완벽 방지 처리) ----------
+// ---------- 레이어 준비 ----------
 function resize(force) {
   const nd = Math.min(window.devicePixelRatio || 1, 2);
   const r = canvas.getBoundingClientRect();
@@ -560,7 +559,6 @@ function resize(force) {
     bgx.restore();
   }
 
-  // ★ cover 캔버스에 2px 여유분을 두어 배경 사진 우측/하단 끝이 절대 비어 보이지 않도록 함
   cover.width = pw + 2; cover.height = ph + 2;
   cvx.fillStyle = CFG.ink;
   for (const c of cells) if (c.a > 0) paintCell(c);
@@ -677,27 +675,10 @@ function frame(now) {
 
 <script>
 /* =========================================================
-   작가 정보 — 총 8명 (신예은 작가노트 및 작품 설명 적용 완료)
-   ========================================================= */
-/* =========================================================
-   작가 정보 — 총 8명 (신예은, 정나림 작가 정보 적용 완료)
+   작가 정보 — 순서: 현준 → 나림 → 예은 → 상웅 → 서연 → 건혁 → 상민 → 연수
    ========================================================= */
 const ARTISTS = [
-  { id: 'yeonsu',    name: '노연수', x: 95,   y: 46,  title: '', link: '', note: '', desc: '' },
-  { id: 'sangmin',   name: '박상민', x: 95,   y: 360, title: '', link: '', note: '', desc: '' },
-  { id: 'geonhyeok', name: '이건혁', x: 332,  y: 222, title: '', link: '', note: '', desc: '' },
-  { id: 'seoyeon',   name: '윤서연', x: 446,  y: 222, title: '', link: '', note: '', desc: '' },
-  { id: 'sangwoong', name: '전상웅', x: 659,  y: 158, title: '', link: '', note: '', desc: '' },
-  {
-    id: 'yeeun',
-    name: '신예은',
-    x: 715,
-    y: 421,
-    title: '',
-    link: '',
-    note: '찻잎을 직접 맷돌에 갈아 차를 만드는 카페에 들렀다. 찻잎을 갈수록 향이 점차 짙어지는 경험에서 이 작업은 시작되었다. 물질을 갈아 새로운 감각을 만들어내는 맷돌의 행위를 빛으로 치환한다면 어떤 모습일까?\n\n맷돌은 본래 곡물을 갈기 위한 도구다. 하지만 꼭 곡물만 갈아야 할까? 이번에는 빛과 소리를 갈아보기로 했다. 회전하는 맷돌 사이로 가루 대신 빛과 안개가 흘러나오고, 낯선 소리가 그 틈을 채운다.\n\n익숙한 사물이 본래의 기능에서 벗어나 새로운 감각을 만들어내는 과정을 보여주고자 한다.',
-    desc: '회전과 빛, 안개, 소리를 이용한 키네틱 설치 작업.\n\n현무암, 목재합판, 알루미늄, 유리, 할로겐전구, 아두이노 회로\n\n510 × 510 × 400 mm'
-  },
+  { id: 'hyeonjun',  name: '정현준', x: 1062, y: 362, title: '', link: '', note: '', desc: '' },
   {
     id: 'narim',
     name: '정나림',
@@ -706,9 +687,23 @@ const ARTISTS = [
     title: 'Monster’s',
     link: '',
     note: '우리는 흔히 ‘비정상적인 형태를 가진 생명체’를 괴물이라고 부른다.\n그렇다면 본인의 기준과는 맞지 않는 다른 생김새나 복장을 가진 사람도 괴물일까?\n\n세상에는 정말 다양한 사람들이 살고 있다.\n“저 사람은 손톱을 온통 까만색으로 뒤덮고 치렁치렁한 귀걸이를 달고 있네.”\n“저 커플은 남자가 키가 엄청 크고, 여자는 키가 엄청 작네? 안 어울린다.”\n\n자신과는 다른 상황과 문화, 사고방식을 가진 사람들을 보고 그들을 다르다고 규정짓고, 이상하게 바라보는 시선을 발견했다.\n\n신기했다.\n그들 역시 각자의 방식으로 살아갈 뿐인데.',
-    desc: '펜과 노트에 괴물의 모습을 하나씩 그려가며 상상했다. 각기 다른 형상과 습성을 가진 괴물들은 저마다의 방식으로 자기의 숨을 쉰다.\n\n영상에서는 네 마리 괴물의 움직임과 일상을 보여준다. 관객은 일정한 거리를 두고 이들의 생김새와 행동을 관찰한다. 괴물들은 누구에게도 눈길을 주지 않은 채 자신에게 주어진 삶을 살아간다.\n\n영상은 끝없이 반복된다. 계속해서 되풀이되며 흘러가는 삶처럼.\n\n3D 애니메이션\n펜과 노트, blender, zbrush, Substance 3D Painter'
+    desc: '펜과 노트에 괴물의 모습을 하나씩 그려가며 상상했다. 각기 다른 형상과 습성을 가진 괴물들은 저마다의 방식으로 자기의 숨을 쉰다.\n\n영상에서는 네 마리 괴물의 움직임과 일상을 보여준다. 관객은 일정한 거리를 두고 이들의 생김새와 행동을 관찰한다. 괴물들은 누구에게도 눈길을 주지 않은 채 자신에게 주어진 삶을 살아간다.\n\n영상은 끝없이 반복된다. 계속해서 되풀이되며 흘러가는 삶처럼.\n\n사용 매체: 펜과 노트, blender, zbrush, Substance 3D Painter\n3D 애니메이션'
   },
-  { id: 'hyeonjun',  name: '정현준', x: 1062, y: 362, title: '', link: '', note: '', desc: '' },
+  {
+    id: 'yeeun',
+    name: '신예은',
+    x: 715,
+    y: 421,
+    title: '',
+    link: '',
+    note: '찻잎을 직접 맷돌에 갈아 차를 만드는 카페에 들렀다. 찻잎을 갈수록 향이 점차 짙어지는 경험에서 이 작업은 시작되었다. 물질을 갈아 새로운 감각을 만들어내는 맷돌의 행위를 빛으로 치환한다면 어떤 모습일까?\n\n맷돌은 본래 곡물을 갈기 위한 도구다. 하지만 꼭 곡물만 갈아야 할까? 이번에는 빛과 소리를 갈아보기로 했다. 회전하는 맷돌 사이로 가루 대신 빛과 안개가 흘러나오고, 낯선 소리가 그 틈을 채운다.\n\n익숙한 사물이 본래의 기능에서 벗어나 새로운 감각을 만들어내는 과정을 보여주고자 한다.',
+    desc: '회전과 빛, 안개, 소리를 이용한 키네틱 설치 작업.\n\nMaterial: 현무암, 목재합판, 알루미늄, 유리, 할로겐전구, 아두이노 회로\n\nSize: 510 × 510 × 400 mm'
+  },
+  { id: 'sangwoong', name: '전상웅', x: 659,  y: 158, title: '', link: '', note: '', desc: '' },
+  { id: 'seoyeon',   name: '윤서연', x: 446,  y: 222, title: '', link: '', note: '', desc: '' },
+  { id: 'geonhyeok', name: '이건혁', x: 332,  y: 222, title: '', link: '', note: '', desc: '' },
+  { id: 'sangmin',   name: '박상민', x: 95,   y: 360, title: '', link: '', note: '', desc: '' },
+  { id: 'yeonsu',    name: '노연수', x: 95,   y: 46,  title: '', link: '', note: '', desc: '' },
 ];
 
 // 비어 있을 때 보여줄 안내 문구
@@ -782,19 +777,19 @@ const dots = ARTISTS.map((a, i) => {
   return g;
 });
 
-// 폰 세로 화면에선 평면도를 90° 돌려서 크게
+// 폰 세로 화면에선 평면도를 상하 반전(-90° 회전)해서 표시 (PC는 기존 유지)
 function layoutMap() {
   const portrait = window.innerWidth < 720 && window.innerHeight > window.innerWidth;
   if (portrait) {
-    map.setAttribute('viewBox', `${-(VB.y + VB.h)} ${VB.x} ${VB.h} ${VB.w}`);
-    root.setAttribute('transform', 'rotate(90)');
+    map.setAttribute('viewBox', `${VB.y} ${-(VB.x + VB.w)} ${VB.h} ${VB.w}`);
+    root.setAttribute('transform', 'rotate(-90)');
   } else {
     map.setAttribute('viewBox', `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
     root.removeAttribute('transform');
   }
   dots.forEach((g, i) => {
     const a = ARTISTS[i];
-    if (portrait) g._label.setAttribute('transform', `rotate(-90 ${a.x} ${a.y})`);
+    if (portrait) g._label.setAttribute('transform', `rotate(90 ${a.x} ${a.y})`);
     else g._label.removeAttribute('transform');
   });
 }
